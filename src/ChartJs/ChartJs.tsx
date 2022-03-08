@@ -1,6 +1,7 @@
 import React, { forwardRef, useImperativeHandle, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
+import { stringifyObjectWithMethods } from "./stringifyObjectWithMethods";
 import type { ViewStyle } from "react-native";
 import type { RefObject } from "react";
 import type { ChartConfiguration, ChartType } from "chart.js";
@@ -16,12 +17,13 @@ const styles = StyleSheet.create({
   webview: {
     height: "100%",
     width: "100%",
+    backgroundColor: "transparent",
   },
 });
 
 export type ChartJsProps<TChartType extends ChartType = ChartType> = {
   initialConfig: ChartConfiguration<TChartType>;
-  style?: ViewStyle;
+  style?: Pick<ViewStyle, "height" | "backgroundColor">;
 };
 
 const ChartJsForwarded = forwardRef<ChartJsRef, ChartJsProps>((props, ref) => {
@@ -31,19 +33,19 @@ const ChartJsForwarded = forwardRef<ChartJsRef, ChartJsProps>((props, ref) => {
     initialConfig: ChartJsProps<TChartType>["initialConfig"]
   ) {
     const chartHeight = JSON.stringify(styles.webview.height);
-    const chartConfig = JSON.stringify(initialConfig);
+    const chartConfigForUseInHtml = stringifyObjectWithMethods<ChartJsProps<TChartType>["initialConfig"]>(
+      initialConfig
+    );
     webRef?.current?.injectJavaScript(`const canvasEl = document.createElement("canvas");
         canvasEl.height = ${chartHeight};
         document.body.appendChild(canvasEl);
-        window.canvasLine = new Chart(canvasEl.getContext('2d'), ${chartConfig});true;`);
+        window.canvasLine = new Chart(canvasEl.getContext('2d'), ${chartConfigForUseInHtml});true;`);
   }
 
   function setNewConfigData<TChartType extends ChartType = ChartType>(data: SetNewConfigDataType<TChartType>) {
-    data.datasets.forEach((_item, i: number) => {
-      const yAxisData = JSON.stringify(data.datasets[i].data);
-      const xAxisData = JSON.stringify(data.labels);
-      webRef?.current?.injectJavaScript(`window.canvasLine.config.data.datasets[${i}].data = ${yAxisData};
-			window.canvasLine.config.data.labels = ${xAxisData};
+    data.datasets.forEach((dataSet, i: number) => {
+      const xyData = stringifyObjectWithMethods(dataSet.data);
+      webRef?.current?.injectJavaScript(`window.canvasLine.config.data.datasets[${i}].data = ${xyData};
 			window.canvasLine.update();true;`);
     });
   }
@@ -54,6 +56,7 @@ const ChartJsForwarded = forwardRef<ChartJsRef, ChartJsProps>((props, ref) => {
 
   const webViewWrapperStyle: ViewStyle = {
     overflow: "hidden",
+    backgroundColor: "transparent",
     ...props.style,
   };
 
